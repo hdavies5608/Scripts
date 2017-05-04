@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# Tool to 'fix' albums, run in album directory.
+# Converts flac to mp3, VBR encodes mp3s, creates an m3u playlist,
+# Applied replay gain, and ensures tags are id3v2.4
+
+# DEPENDS: ffmpeg (flac and lame), mutagen (mid3v3), python-rgain (replaygain)
+
+# Convert flac to mp3
+find -type f -name "*.flac" -print0 | while read -d $'\0' a; do
+  </dev/null ffmpeg -i "$a" -qscale:a 0 -map_metadata 0 -id3v2_version 4 "${a[@]/%flac/mp3}" && rm "$a"
+done
+
+# VBR Encode the mp3 files
+find -type f -name "*.mp3" -prune -print0 | while read -d $'\0' a; do
+  mkdir "$(dirname "$a")"/vbr
+  </dev/null ffmpeg -i "$a" -map 0:0 -map 0:1? -c copy -id3v2_version 4 -codec:a libmp3lame -qscale:a 0 -f mp3 "$(dirname "$a")"/vbr/"$(basename "$a")" -y
+done
+mv ./vbr/* . && rmdir ./vbr
+
+# Create an m3u playlist
+ls *.mp3 -1 > "$(echo ${PWD##*/}).m3u"
+
+# Apply replaygain to the album
+replaygain *.mp3
+
+# Convert all tags to id3v2.4
+mid3v2 -C *.mp3
